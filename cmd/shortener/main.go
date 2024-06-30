@@ -6,14 +6,13 @@ import (
     "log"
     "math/rand"
     "net/http"
-    "sync"
     "time"
 
     "github.com/dkwxn/url-shortener/internal/storage"
 )
 
 var (
-    urlStore = sync.Map{}
+    urlStore *storage.Storage
     letters  = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 )
 
@@ -45,7 +44,10 @@ func shortenURLHandler(w http.ResponseWriter, r *http.Request) {
     }
 
     shortURL := generateShortURL(6)
-    urlStore.Store(shortURL, req.URL)
+    if err := urlStore.Store(shortURL, req.URL); err != nil {
+        http.Error(w, "Could not save URL", http.StatusInternalServerError)
+        return
+    }
 
     resp := map[string]string{
         "short_url": fmt.Sprintf("http://localhost:8080/%s", shortURL),
@@ -56,7 +58,7 @@ func shortenURLHandler(w http.ResponseWriter, r *http.Request) {
 func redirectHandler(w http.ResponseWriter, r *http.Request) {
     shortURL := r.URL.Path[1:]
     if originalURL, ok := urlStore.Load(shortURL); ok {
-        http.Redirect(w, r, originalURL.(string), http.StatusFound)
+        http.Redirect(w, r, originalURL, http.StatusFound)
     } else {
         http.Error(w, "URL not found", http.StatusNotFound)
     }

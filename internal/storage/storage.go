@@ -2,6 +2,7 @@ package storage
 
 import (
     "encoding/json"
+    "errors"
     "os"
     "sync"
 )
@@ -23,7 +24,7 @@ func NewStorage(filename string) (*Storage, error) {
         store: make(map[string]string),
     }
 
-    if err := s.load(); err != nil {
+    if err := s.load(); err != nil && !errors.Is(err, os.ErrNotExist) {
         return nil, err
     }
 
@@ -32,7 +33,15 @@ func NewStorage(filename string) (*Storage, error) {
 
 func (s *Storage) load() error {
     decoder := json.NewDecoder(s.file)
-    return decoder.Decode(&s.store)
+    if err := decoder.Decode(&s.store); err != nil {
+        // If the file is empty or contains invalid JSON, initialize an empty store
+        if errors.Is(err, os.ErrNotExist) || err.Error() == "EOF" {
+            s.store = make(map[string]string)
+            return nil
+        }
+        return err
+    }
+    return nil
 }
 
 func (s *Storage) save() error {
